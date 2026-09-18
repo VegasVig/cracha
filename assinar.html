@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Termo de Entrega de Crachá · VEGAS</title>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--bd:#dcdfe5;--tx:#1a1c20;--mut:#6b7280;--gold:#b5861f;--green:#1f9d58;--red:#d14434}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+.wrap{max-width:720px;margin:0 auto;padding:16px 16px 40px}
+.head{background:#111418;color:#fff;padding:16px;text-align:center;letter-spacing:.5px}
+.head b{color:var(--gold);letter-spacing:1px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px;margin-top:14px}
+h2{margin:0 0 6px;font-size:19px}
+label{display:block;font-size:12px;color:var(--mut);margin:14px 0 6px;text-transform:uppercase;letter-spacing:.5px}
+input{width:100%;border:1px solid var(--bd);border-radius:10px;padding:13px;font-size:18px;font-family:inherit;letter-spacing:3px;text-align:center}
+.btn{background:var(--gold);color:#fff;border:0;border-radius:10px;padding:15px;font-weight:700;font-size:16px;width:100%;cursor:pointer}
+.btn.sec{background:#eceef2;color:#1a1c20}.btn.green{background:var(--green)}
+.btn:disabled{opacity:.55}
+.doc{background:#fff;border:1px solid var(--bd);border-radius:10px;padding:18px;font:13.5px/1.6 Cambria,Georgia,serif;white-space:pre-wrap;max-height:56vh;overflow:auto}
+.sigbox{border:2px dashed var(--bd);border-radius:12px;background:#fcfcfd;position:relative;touch-action:none;margin-top:12px}
+canvas{display:block;width:100%;height:190px;border-radius:12px}
+.sighint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#b6bcc7;font-size:14px;pointer-events:none}
+.chk{display:flex;gap:11px;align-items:flex-start;margin-top:16px;font-size:14px;cursor:pointer}
+.chk input{width:22px;height:22px;flex:0 0 22px;margin:0}
+.mut{color:var(--mut)}.sm{font-size:13px}
+.ok{text-align:center;padding:10px 0}.ok .em{font-size:44px}
+.err{background:#fdecea;border:1px solid #f5c6c0;color:#8f2a1f;border-radius:10px;padding:14px;font-size:14px}
+.row{display:flex;gap:10px;margin-top:14px}.row>*{flex:1}
+.kv{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:7px 0;border-bottom:1px solid #eef0f3}
+.kv span{color:var(--mut)}
+.trava{opacity:.45;pointer-events:none}
+</style>
+</head>
+<body>
+<div class="head"><b>VEGAS</b> · ASSINATURA DE TERMO</div>
+<div class="wrap" id="app"><div class="card mut">Carregando...</div></div>
+
+<script>
+/* ====================================================================
+   CONFIGURAÇÃO — mesma URL /exec usada no index.html
+   ==================================================================== */
+const API = "https://script.google.com/macros/s/AKfycbwiMnrScRK2ujw791cupBHVtjeZA2w7XW5ElmpXSJzSDD7-gUEORZDZivpiLvVqQzjB3A/exec";
+
+const TOKEN = new URLSearchParams(location.search).get("t") || "";
+let ACC=null, TERMO=null, SIG=null, IP="não informado";
+const $=s=>document.querySelector(s);
+const esc=t=>String(t==null?"":t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function api(acao, dados){
+  let r;
+  try{
+    r = await fetch(API,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body:JSON.stringify(Object.assign({acao},dados||{}))});
+  }catch(e){ throw new Error("Sem conexão. Verifique sua internet e tente novamente."); }
+  const j = await r.json();
+  if(!j.ok) throw new Error(j.erro||"Falha na operação.");
+  return j.dados;
+}
+function erro(msg,dica){
+  $("#app").innerHTML=`<div class="card"><div class="err"><b>${esc(msg)}</b>${dica?`<div class="sm" style="margin-top:6px">${esc(dica)}</div>`:""}</div></div>`;
+}
+
+/* IP informado pelo navegador — evidência complementar, não verificável */
+fetch("https://api.ipify.org?format=json").then(r=>r.json()).then(j=>{IP=j.ip||IP}).catch(()=>{});
+
+(async function(){
+  if(API.indexOf("COLE_SUA_URL")>=0) return erro("Configuração pendente","Substitua a constante API no assinar.html.");
+  if(!TOKEN) return erro("Link incompleto","Abra o endereço exatamente como recebido do RH.");
+  try{
+    const r=await api("pubInfo",{token:TOKEN});
+    if(!r.valido){
+      const m={LINK_INVALIDO:["Link inválido","Confira se o endereço foi copiado por completo."],
+               CANCELADO:["Este link foi cancelado","Procure o RH para receber um novo link."],
+               EXPIRADO:["Este link expirou","Solicite ao RH a geração de um novo link."]}[r.motivo];
+      return erro(m[0],m[1]);
+    }
+    if(r.status==="ASSINADO") return telaJaAssinado(r.assinadoEm);
+    telaIdentidade(r);
+  }catch(e){ erro("Não foi possível abrir o termo", e.message) }
+})();
+
+function telaIdentidade(r){
+  $("#app").innerHTML=`<div class="card">
+    <h2>Termo de Entrega de Crachá</h2>
+    <div class="mut sm">${esc(r.empresa)}</div>
+    <div style="margin-top:14px" class="sm">Olá, <b>${esc(r.primeiroNome)}</b>. Para abrir e assinar o documento, confirme sua identidade.</div>
+    <label>5 últimos dígitos do seu CPF</label>
+    <input id="cpf5" inputmode="numeric" maxlength="5" placeholder="•••••">
+    ${r.exigirPin?'<label>PIN recebido do RH</label><input id="pin" inputmode="numeric" maxlength="6" placeholder="••••••">':''}
+    <div style="margin-top:18px"><button class="btn" id="bt">Abrir documento</button></div>
+    <div class="sm mut" style="margin-top:12px">Seus dados não podem ser alterados nesta página. Após 5 tentativas incorretas o link é bloqueado.</div>
+  </div>`;
+  $("#bt").onclick=validar;
+  $("#cpf5").onkeydown=e=>{ if(e.key==="Enter") validar() };
+  $("#cpf5").focus();
+}
+async function validar(){
+  const b=$("#bt"); b.disabled=true; b.textContent="Verificando...";
+  try{
+    const r=await api("pubValidar",{token:TOKEN,cpf5:$("#cpf5").value,pin:$("#pin")?$("#pin").value:""});
+    ACC=r.acc; TERMO=r.termo;
+    if(r.status==="ASSINADO") return telaJaAssinado(r.assinadoEm);
+    telaTermo();
+  }catch(e){ b.disabled=false; b.textContent="Abrir documento"; alert(e.message) }
+}
+
+function telaTermo(){
+  $("#app").innerHTML=`<div class="card"><h2>Leia o termo</h2>
+    <div class="doc" id="doc">${esc(TERMO.join("\n"))}</div>
+    <div class="sm mut" style="margin-top:8px">Role até o fim do documento para habilitar a assinatura.</div></div>
+  <div class="card trava" id="cx">
+    <h2>Assinatura do colaborador</h2>
+    <div class="sm mut">Assine com o dedo (celular) ou com o mouse.</div>
+    <div class="sigbox"><canvas id="cv"></canvas><div class="sighint" id="hint">assine aqui</div></div>
+    <div class="row"><button class="btn sec" onclick="limpar()">Limpar</button></div>
+    <label class="chk"><input type="checkbox" id="aceite"><span>Li e estou de acordo com o conteúdo do termo, e confirmo o recebimento do crachá funcional descrito acima.</span></label>
+    <div style="margin-top:16px"><button class="btn" id="bt-assin" onclick="confirmar()">ASSINAR TERMO</button></div>
+    <div class="sm mut" style="margin-top:10px">Ao assinar, serão registrados data, hora e informações técnicas do acesso. Depois de assinado, o documento não pode ser alterado.</div>
+  </div>`;
+  iniciarCanvas();
+  const d=$("#doc");
+  const libera=()=>{ if(d.scrollTop+d.clientHeight >= d.scrollHeight-24) $("#cx").classList.remove("trava") };
+  d.onscroll=libera; setTimeout(libera,300);
+}
+
+function iniciarCanvas(){
+  const cv=$("#cv"), ctx=cv.getContext("2d"), r=window.devicePixelRatio||1;
+  cv.width=cv.offsetWidth*r; cv.height=190*r; ctx.scale(r,r);
+  ctx.lineWidth=2.2; ctx.lineCap="round"; ctx.lineJoin="round"; ctx.strokeStyle="#111";
+  let des=false, vazio=true;
+  const pos=ev=>{ const b=cv.getBoundingClientRect(), t=ev.touches?ev.touches[0]:ev;
+    return {x:t.clientX-b.left, y:t.clientY-b.top} };
+  const ini=ev=>{ ev.preventDefault(); des=true; const p=pos(ev); ctx.beginPath(); ctx.moveTo(p.x,p.y) };
+  const mov=ev=>{ if(!des)return; ev.preventDefault(); const p=pos(ev); ctx.lineTo(p.x,p.y); ctx.stroke();
+    if(vazio){ vazio=false; $("#hint").style.display="none" } };
+  const fim=()=>{ des=false };
+  ["mousedown","touchstart"].forEach(e=>cv.addEventListener(e,ini,{passive:false}));
+  ["mousemove","touchmove"].forEach(e=>cv.addEventListener(e,mov,{passive:false}));
+  ["mouseup","mouseleave","touchend","touchcancel"].forEach(e=>cv.addEventListener(e,fim));
+  SIG={cv,vazia:()=>vazio,limpar:()=>{ ctx.clearRect(0,0,cv.width,cv.height); vazio=true; $("#hint").style.display="flex" }};
+}
+function limpar(){ SIG&&SIG.limpar() }
+
+async function confirmar(){
+  if(!$("#aceite").checked) return alert("Marque a confirmação de leitura para assinar.");
+  if(SIG.vazia()) return alert("Desenhe sua assinatura no quadro antes de continuar.");
+  if(!confirm("Confirmar a assinatura do termo?\n\nApós confirmar, o documento é finalizado e não pode ser alterado.")) return;
+  const b=$("#bt-assin"); b.disabled=true; b.textContent="Registrando assinatura...";
+  try{
+    const r=await api("pubAssinar",{acc:ACC, assinatura:SIG.cv.toDataURL("image/png"),
+      meta:{aceite:true, ip:IP, userAgent:navigator.userAgent, origem:location.host,
+            tela:screen.width+"x"+screen.height, fuso:Intl.DateTimeFormat().resolvedOptions().timeZone}});
+    telaSucesso(r);
+  }catch(e){ b.disabled=false; b.textContent="ASSINAR TERMO"; alert(e.message) }
+}
+
+function telaSucesso(r){
+  $("#app").innerHTML=`<div class="card"><div class="ok"><div class="em">✅</div>
+    <h2>Termo assinado com sucesso</h2>
+    <div class="mut sm">Uma cópia foi arquivada pelo RH.</div></div>
+    <div class="kv"><span>Data e hora da assinatura</span><b>${esc(r.assinadoEm)}</b></div>
+    <div class="kv"><span>Identificador da assinatura</span><b>${esc(r.assinaturaId)}</b></div>
+    <div style="margin-top:18px"><button class="btn green" onclick="baixar(this)">Baixar cópia em PDF</button></div>
+  </div>`;
+}
+function telaJaAssinado(quando){
+  $("#app").innerHTML=`<div class="card"><div class="ok"><div class="em">✅</div>
+    <h2>Este termo já foi assinado</h2>
+    ${quando?`<div class="mut sm">Assinado em ${esc(quando)}</div>`:""}</div>
+    <div class="sm mut">Se precisar de uma cópia, solicite ao RH.</div></div>`;
+}
+async function baixar(b){
+  b.disabled=true; b.textContent="Gerando...";
+  try{
+    const r=await api("pubPdf",{acc:ACC});
+    b.disabled=false; b.textContent="Baixar cópia em PDF";
+    const bin=atob(r.base64), arr=new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+    const url=URL.createObjectURL(new Blob([arr],{type:"application/pdf"}));
+    const a=document.createElement("a"); a.href=url; a.download=r.nome; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),4000);
+  }catch(e){ b.disabled=false; b.textContent="Baixar cópia em PDF"; alert(e.message) }
+}
+</script>
+</body>
+</html>

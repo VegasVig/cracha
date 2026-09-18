@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>VEGAS · Termos Digitais</title>
+<style>
+:root{--bg:#0f1115;--card:#171a21;--card2:#1e222b;--bd:#2a2f3a;--tx:#e8eaed;--mut:#9aa0ab;
+--gold:#d4a12a;--green:#2fae66;--red:#e0574a;--blue:#3d7fd6}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:18px}
+h1,h2,h3{margin:0 0 10px}
+.top{display:flex;align-items:center;gap:14px;padding:12px 18px;background:var(--card);border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:20}
+.brand{font-weight:800;letter-spacing:.5px}.brand span{color:var(--gold)}
+.top nav{display:flex;gap:4px;flex:1;flex-wrap:wrap}
+.top nav button{background:none;border:0;color:var(--mut);padding:8px 12px;border-radius:8px;cursor:pointer;font-size:13px}
+.top nav button.on{background:var(--card2);color:var(--tx)}
+.who{font-size:12px;color:var(--mut);white-space:nowrap}
+.grid{display:grid;gap:12px}.g4{grid-template-columns:repeat(4,1fr)}.g2{grid-template-columns:1fr 1fr}
+@media(max-width:820px){.g4{grid-template-columns:1fr 1fr}.g2{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px}
+.stat .v{font-size:26px;font-weight:800;margin-top:4px}
+.stat .l{font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.6px}
+label{display:block;font-size:12px;color:var(--mut);margin:12px 0 5px;text-transform:uppercase;letter-spacing:.5px}
+input,select{width:100%;background:var(--card2);border:1px solid var(--bd);color:var(--tx);border-radius:10px;padding:11px 12px;font-size:15px;font-family:inherit}
+input:focus,select:focus{outline:0;border-color:var(--gold)}
+.btn{background:var(--gold);color:#16181d;border:0;border-radius:10px;padding:12px 16px;font-weight:700;cursor:pointer;font-size:14px}
+.btn.sec{background:var(--card2);color:var(--tx);border:1px solid var(--bd)}
+.btn.red{background:var(--red);color:#fff}.btn.blue{background:var(--blue);color:#fff}
+.btn.sm{padding:7px 11px;font-size:12px;border-radius:8px}
+.btn:disabled{opacity:.5;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.5px;padding:10px 8px;border-bottom:1px solid var(--bd)}
+td{padding:11px 8px;border-bottom:1px solid #22262f;vertical-align:middle}
+tr:hover td{background:#1b1f27}
+.tag{display:inline-block;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:700}
+.t-PENDENTE{background:#3a2f12;color:#e3b64a}.t-ACESSADO{background:#12303a;color:#57bede}
+.t-ASSINADO{background:#12301f;color:#5ad18c}.t-CANCELADO{background:#2b2b2b;color:#9aa0ab}
+.t-EXPIRADO{background:#3a1a16;color:#e8796b}
+.mut{color:var(--mut)}.sm{font-size:12px}
+.mask{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow:auto;z-index:40}
+.modal{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:20px;max-width:760px;width:100%}
+.doc{background:#fff;color:#111;border-radius:10px;padding:22px;font:13px/1.55 Cambria,Georgia,serif;max-height:340px;overflow:auto;white-space:pre-wrap}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#fff;color:#111;padding:11px 18px;border-radius:99px;font-weight:600;font-size:13px;opacity:0;pointer-events:none;transition:.2s;z-index:60}
+.toast.on{opacity:1}
+.login{max-width:380px;margin:9vh auto}
+.linkbox{background:var(--card2);border:1px dashed var(--bd);border-radius:10px;padding:10px;word-break:break-all;font-size:12px;font-family:ui-monospace,Menlo,monospace}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #22262f;font-size:13px}
+.kv span{color:var(--mut)}.kv b{text-align:right}
+.ev{font-size:12px;color:var(--mut);padding:6px 0;border-bottom:1px solid #22262f}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ====================================================================
+   CONFIGURAÇÃO — cole aqui a URL /exec da implantação do Apps Script
+   ==================================================================== */
+const API = "https://script.google.com/macros/s/AKfycbwiMnrScRK2ujw791cupBHVtjeZA2w7XW5ElmpXSJzSDD7-gUEORZDZivpiLvVqQzjB3A/exec";
+
+const S={tk:null,nome:"",cfg:null,rota:"dash"};
+const $=s=>document.querySelector(s);
+const esc=t=>String(t==null?"":t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("on");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("on"),2600)}
+function busy(b,txt){if(!b)return;b.disabled=true;b._o=b.textContent;b.textContent=txt||"Aguarde..."}
+function free(b){if(!b)return;b.disabled=false;if(b._o)b.textContent=b._o}
+
+/* text/plain evita preflight CORS no Apps Script */
+async function api(acao, dados){
+  let r;
+  try{
+    r = await fetch(API,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},
+      body:JSON.stringify(Object.assign({acao},dados||{}))});
+  }catch(e){ throw new Error("Sem conexão com o servidor."); }
+  const j = await r.json();
+  if(!j.ok){
+    if(j.erro==="SESSAO_EXPIRADA"){ S.tk=null; sessionStorage.removeItem("vg_tk"); telaLogin("Sessão expirada. Entre novamente."); throw new Error("SESSAO_EXPIRADA"); }
+    throw new Error(j.erro||"Falha na operação.");
+  }
+  return j.dados;
+}
+const apiRh=(acao,dados)=>api(acao,Object.assign({tk:S.tk},dados||{}));
+function falha(e,b){ free(b); if(String(e.message)!=="SESSAO_EXPIRADA") toast(e.message) }
+
+/* ---------- LOGIN ---------- */
+function telaLogin(msg){
+  $("#app").innerHTML=`<div class="wrap"><div class="login card">
+    <h2><span style="color:var(--gold)">VEGAS</span> · Termos Digitais</h2>
+    <div class="mut sm">Painel do RH — entrega e assinatura de termos</div>
+    <label>E-mail</label><input id="lg-email" autocomplete="username">
+    <label>Senha</label><input id="lg-senha" type="password" autocomplete="current-password">
+    <div style="margin-top:16px"><button class="btn" style="width:100%" id="lg-btn">Entrar</button></div>
+    ${msg?`<div class="sm" style="color:var(--red);margin-top:10px">${esc(msg)}</div>`:""}
+  </div></div>`;
+  $("#lg-btn").onclick=fazerLogin;
+  $("#lg-senha").onkeydown=e=>{if(e.key==="Enter")fazerLogin()};
+}
+async function fazerLogin(){
+  const b=$("#lg-btn"); busy(b,"Entrando...");
+  try{
+    const r=await api("login",{email:$("#lg-email").value,senha:$("#lg-senha").value});
+    S.tk=r.token; S.nome=r.nome; sessionStorage.setItem("vg_tk",r.token); sessionStorage.setItem("vg_nome",r.nome);
+    S.cfg=await apiRh("bootstrap");
+    render("dash");
+  }catch(e){ free(b); telaLogin(e.message) }
+}
+
+/* ---------- SHELL ---------- */
+function render(rota){
+  S.rota=rota||S.rota;
+  const nav=[["dash","Dashboard"],["nova","Nova entrega"],["lista","Entregas"],["conta","Conta"]];
+  $("#app").innerHTML=`<div class="top"><div class="brand">VEGAS<span> · Termos</span></div><nav>
+    ${nav.map(n=>`<button class="${S.rota===n[0]?"on":""}" onclick="render('${n[0]}')">${n[1]}</button>`).join("")}
+    </nav><div class="who">${esc(S.nome)}</div><button class="btn sec sm" onclick="sair()">Sair</button></div>
+    <div class="wrap" id="view"><div class="mut">Carregando...</div></div>`;
+  ({dash:vDash,nova:vNova,lista:vLista,conta:vConta})[S.rota]();
+}
+async function sair(){ try{await apiRh("logout")}catch(e){} S.tk=null; sessionStorage.clear(); telaLogin() }
+
+/* ---------- DASHBOARD ---------- */
+async function vDash(){
+  try{
+    const d=await apiRh("dashboard");
+    const st=(l,v,c)=>`<div class="card stat"><div class="l">${l}</div><div class="v" style="color:${c}">${v}</div></div>`;
+    $("#view").innerHTML=`<h2>Visão geral</h2><div class="grid g4">
+      ${st("Total de termos",d.total,"var(--tx)")}
+      ${st("Pendentes de assinatura",d.pendentes,"var(--gold)")}
+      ${st("Assinados",d.assinados,"var(--green)")}
+      ${st("Criados no mês",d.mes,"var(--blue)")}
+      </div><div class="grid g2" style="margin-top:12px">
+      <div class="card"><h3>Entregas recentes</h3>
+        ${d.recentes.length?d.recentes.map(r=>`<div class="kv"><span>${esc(r.nome)}<br><span class="sm">${esc(r.criadoEm)}</span></span>
+          <b><span class="tag t-${r.status}">${r.status}</span><br><button class="btn sec sm" style="margin-top:6px" onclick="detalhe('${r.id}')">Abrir</button></b></div>`).join(""):'<div class="mut sm">Nenhuma entrega ainda.</div>'}
+      </div>
+      <div class="card"><h3>Por empresa</h3>
+        ${d.porEmpresa.map(e=>`<div class="kv"><span>${esc(e.empresa)}</span><b>${e.total}</b></div>`).join("")}
+        <div class="kv"><span>Cancelados</span><b>${d.cancelados}</b></div>
+        <div class="kv"><span>Expirados</span><b>${d.expirados}</b></div>
+      </div></div>`;
+  }catch(e){ falha(e) }
+}
+
+/* ---------- NOVA ENTREGA ---------- */
+function vNova(){
+  const c=S.cfg;
+  $("#view").innerHTML=`<h2>Nova entrega de crachá</h2>
+  <div class="card" style="max-width:780px">
+    <label>Empresa (CNPJ que constará no termo)</label>
+    <select id="f-emp" onchange="empTrocou()">${c.empresas.map(e=>`<option value="${e.id}">${esc(e.nome)} — CNPJ ${e.cnpj}</option>`).join("")}</select>
+    <div class="grid g2">
+      <div><label>Nome completo do funcionário</label><input id="f-nome" placeholder="Ex.: JOAO DA SILVA SANTOS"></div>
+      <div><label>CPF</label><input id="f-cpf" inputmode="numeric" placeholder="000.000.000-00" oninput="mascaraCpf(this)"></div>
+    </div>
+    <div class="grid g2">
+      <div><label>Cidade do termo</label><select id="f-cidade">${c.cidades.map(x=>`<option>${x}</option>`).join("")}</select></div>
+      <div><label>Data da entrega</label><input id="f-data" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+    </div>
+    <label>Item entregue</label><select id="f-item">${c.itens.map(x=>`<option>${esc(x)}</option>`).join("")}</select>
+    <label>Valor de reposição</label><input id="f-valor" value="${esc(c.valorPadrao)}">
+    <div class="grid g2">
+      <div><label>E-mail (opcional)</label><input id="f-email" type="email"></div>
+      <div><label>Telefone / WhatsApp (opcional)</label><input id="f-tel" inputmode="numeric" placeholder="24999999999"></div>
+    </div>
+    <div class="grid g2">
+      <div><label>Matrícula (opcional)</label><input id="f-mat"></div>
+      <div><label>Cargo (opcional)</label><input id="f-cargo"></div>
+    </div>
+    <div class="mut sm" style="margin-top:14px">O link expira em ${c.validadeDias} dias. O funcionário confirma identidade com os 5 últimos dígitos do CPF${c.exigirPin?" e o PIN gerado.":"."}</div>
+    <div style="margin-top:16px"><button class="btn" id="f-btn" onclick="salvarEntrega(this)">Gerar link de assinatura</button></div>
+  </div><div id="f-out"></div>`;
+  empTrocou();
+}
+function empTrocou(){
+  const e=S.cfg.empresas.find(x=>x.id===$("#f-emp").value);
+  if(e&&$("#f-cidade")) $("#f-cidade").value=e.cidade;
+}
+function mascaraCpf(el){
+  const v=el.value.replace(/\D/g,"").slice(0,11);
+  el.value=v.replace(/(\d{3})(\d)/,"$1.$2").replace(/(\d{3})\.(\d{3})(\d)/,"$1.$2.$3").replace(/(\d{3})\.(\d{3})\.(\d{3})(\d)/,"$1.$2.$3-$4");
+}
+async function salvarEntrega(b){
+  busy(b,"Gerando...");
+  const dados={empresaId:$("#f-emp").value,nome:$("#f-nome").value,cpf:$("#f-cpf").value,
+    cidade:$("#f-cidade").value,dataEntrega:$("#f-data").value,item:$("#f-item").value,
+    valorReposicao:$("#f-valor").value,email:$("#f-email").value,telefone:$("#f-tel").value,
+    matricula:$("#f-mat").value,cargo:$("#f-cargo").value};
+  try{
+    const r=await apiRh("criarEntrega",{dados}); free(b);
+    const wa="https://wa.me/?text="+encodeURIComponent("Olá! Assine o Termo de Entrega de Crachá: "+r.link);
+    $("#f-out").innerHTML=`<div class="card" style="max-width:780px;margin-top:12px;border-color:var(--green)">
+      <h3 style="color:var(--green)">Link gerado · ${esc(r.id)}</h3>
+      <div class="linkbox">${esc(r.link)}</div>
+      ${r.pin?`<div class="sm" style="margin-top:8px">PIN de confirmação: <b>${esc(r.pin)}</b> — envie por um canal diferente do link.</div>`:""}
+      <div class="row" style="margin-top:12px">
+        <button class="btn sm" onclick="copiar('${r.link}')">Copiar link</button>
+        <a class="btn sm blue" style="text-decoration:none" target="_blank" href="${wa}">Enviar no WhatsApp</a>
+        <button class="btn sm sec" onclick="detalhe('${r.id}')">Ver registro</button>
+      </div></div>`;
+    ["f-nome","f-cpf","f-email","f-tel","f-mat","f-cargo"].forEach(i=>$("#"+i).value="");
+  }catch(e){ falha(e,b) }
+}
+function copiar(t){
+  (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject())
+    .then(()=>toast("Link copiado"),()=>{
+      const i=document.createElement("textarea");i.value=t;document.body.appendChild(i);i.select();
+      document.execCommand("copy");i.remove();toast("Link copiado");
+    });
+}
+
+/* ---------- LISTA ---------- */
+function vLista(){
+  $("#view").innerHTML=`<h2>Entregas</h2>
+  <div class="card"><div class="grid g4">
+    <div><label>Busca (nome, CPF ou ID)</label><input id="l-q" oninput="carregarLista()"></div>
+    <div><label>Status</label><select id="l-st" onchange="carregarLista()">${["TODOS","PENDENTE","ACESSADO","ASSINADO","CANCELADO","EXPIRADO"].map(s=>`<option>${s}</option>`).join("")}</select></div>
+    <div><label>De</label><input id="l-de" type="date" onchange="carregarLista()"></div>
+    <div><label>Até</label><input id="l-ate" type="date" onchange="carregarLista()"></div>
+  </div>
+  <label>Empresa</label><select id="l-emp" onchange="carregarLista()"><option value="TODAS">Todas</option>
+    ${S.cfg.empresas.map(e=>`<option value="${e.id}">${esc(e.nome)}</option>`).join("")}</select>
+  </div><div class="card" style="margin-top:12px;overflow:auto" id="l-tab"><div class="mut">Carregando...</div></div>`;
+  carregarLista();
+}
+function carregarLista(){
+  clearTimeout(window._lt);
+  window._lt=setTimeout(async()=>{
+    try{
+      const arr=await apiRh("listar",{filtro:{q:$("#l-q").value,status:$("#l-st").value,
+        empresaId:$("#l-emp").value,de:$("#l-de").value,ate:$("#l-ate").value}});
+      if(!arr.length){ $("#l-tab").innerHTML='<div class="mut">Nenhum registro encontrado.</div>'; return; }
+      $("#l-tab").innerHTML=`<table><thead><tr><th>Funcionário</th><th>CPF</th><th>Empresa</th><th>Entrega</th>
+        <th>Status</th><th>Assinado em</th><th></th></tr></thead><tbody>
+        ${arr.map(e=>`<tr><td><b>${esc(e.nome)}</b><div class="sm mut">${esc(e.id)}</div></td>
+          <td class="sm">${esc(e.cpfMask)}</td>
+          <td class="sm">${esc(String(e.empresa).replace("VEGAS ","").substr(0,32))}</td>
+          <td class="sm">${esc(e.dataEntrega)}<div class="sm mut">${esc(e.cidade)}</div></td>
+          <td><span class="tag t-${e.status}">${e.status}</span></td>
+          <td class="sm">${esc(e.assinadoEm||"—")}</td>
+          <td><div class="row">
+            <button class="btn sec sm" onclick="detalhe('${e.id}')">Ver</button>
+            ${e.status!=="ASSINADO"&&e.status!=="CANCELADO"?`<button class="btn sec sm" onclick="copiar('${e.link}')">Link</button>`:""}
+            ${e.temPdf?`<button class="btn sm" onclick="baixarPdf('${e.id}',this)">PDF</button>`:""}
+          </div></td></tr>`).join("")}</tbody></table>`;
+    }catch(e){ falha(e) }
+  },250);
+}
+
+/* ---------- DETALHE ---------- */
+async function detalhe(id){
+  try{
+    const d=await apiRh("detalhe",{id}); const e=d.entrega;
+    const kv=(k,v)=>`<div class="kv"><span>${k}</span><b>${esc(v||"—")}</b></div>`;
+    const m=document.createElement("div"); m.className="mask";
+    m.onclick=ev=>{ if(ev.target===m) m.remove() };
+    m.innerHTML=`<div class="modal">
+      <div class="row" style="justify-content:space-between"><h3>${esc(e.nome)} <span class="tag t-${e.status}">${e.status}</span></h3>
+      <button class="btn sec sm" onclick="this.closest('.mask').remove()">Fechar</button></div>
+      <div class="grid g2"><div>
+        ${kv("Registro",e.id)}${kv("Empresa",e.empresa)}${kv("CNPJ",e.cnpj)}${kv("CPF",e.cpfMask)}
+        ${kv("Item",e.item)}${kv("Reposição",e.valorReposicao)}
+      </div><div>
+        ${kv("Cidade / data",e.cidade+" · "+e.dataEntrega)}${kv("Criado por",e.criadoPor)}${kv("Criado em",e.criadoEm)}
+        ${kv("Acessado em",e.acessadoEm)}${kv("Assinado em",e.assinadoEm)}${kv("Link válido até",e.validadeAte)}
+      </div></div>
+      ${d.assinatura?`<div class="card" style="margin-top:12px;background:var(--card2)">
+        <h3 style="font-size:14px">Assinatura eletrônica</h3>
+        ${kv("Identificador",d.assinatura.id)}${kv("Data/hora",d.assinatura.dataHora)}
+        ${kv("IP (informado pelo navegador)",d.assinatura.ip)}
+        <div class="kv"><span>Hash SHA-256 do PDF</span><b class="sm" style="word-break:break-all">${esc(d.assinatura.hashPdf)}</b></div>
+        <div class="sm mut" style="margin-top:8px">Dispositivo: ${esc(d.assinatura.userAgent)}</div></div>`:""}
+      <label>Termo</label><div class="doc">${esc(d.termo.join("\n"))}</div>
+      <label>Trilha de auditoria</label><div style="max-height:150px;overflow:auto">
+        ${d.eventos.map(x=>`<div class="ev">${esc(x.dataHora)} · <b>${esc(x.acao)}</b> · ${esc(x.usuario)}${x.detalhe?" · "+esc(x.detalhe):""}</div>`).join("")}
+      </div>
+      <div class="row" style="margin-top:16px">
+        ${e.temPdf?`<button class="btn" onclick="baixarPdf('${e.id}',this)">Baixar PDF assinado</button>`:""}
+        ${e.status!=="ASSINADO"&&e.status!=="CANCELADO"?`<button class="btn sec" onclick="copiar('${e.link}')">Copiar link</button>`:""}
+        ${e.status!=="ASSINADO"?`<button class="btn sec" onclick="novoLink('${e.id}')">Gerar novo link</button>`:""}
+        ${e.status!=="ASSINADO"?`<button class="btn red" onclick="cancelar('${e.id}')">Cancelar link</button>`:""}
+      </div></div>`;
+    document.body.appendChild(m);
+  }catch(e){ falha(e) }
+}
+async function novoLink(id){
+  if(!confirm("Gerar novo link? O link anterior deixa de funcionar.")) return;
+  try{ const r=await apiRh("novoLink",{id}); copiar(r.link);
+       document.querySelector(".mask")?.remove(); toast("Novo link gerado e copiado"); recarregar(); }
+  catch(e){ falha(e) }
+}
+async function cancelar(id){
+  const motivo=prompt("Motivo do cancelamento:"); if(motivo===null) return;
+  try{ await apiRh("cancelar",{id,motivo}); document.querySelector(".mask")?.remove();
+       toast("Link cancelado"); recarregar(); }
+  catch(e){ falha(e) }
+}
+function recarregar(){ S.rota==="lista"?carregarLista():render(S.rota) }
+async function baixarPdf(id,b){
+  busy(b,"...");
+  try{ const r=await apiRh("pdf",{id}); free(b); baixar(r.nome,r.base64); }
+  catch(e){ falha(e,b) }
+}
+function baixar(nome,b64){
+  const bin=atob(b64), arr=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+  const url=URL.createObjectURL(new Blob([arr],{type:"application/pdf"}));
+  const a=document.createElement("a"); a.href=url; a.download=nome; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+}
+
+/* ---------- CONTA ---------- */
+function vConta(){
+  $("#view").innerHTML=`<h2>Conta</h2><div class="card" style="max-width:420px">
+    <label>Senha atual</label><input id="c-a" type="password">
+    <label>Nova senha (mín. 8 caracteres)</label><input id="c-b" type="password">
+    <div style="margin-top:16px"><button class="btn" onclick="trocarSenha(this)">Alterar senha</button></div></div>`;
+}
+async function trocarSenha(b){
+  busy(b,"Salvando...");
+  try{ await apiRh("trocarSenha",{atual:$("#c-a").value,nova:$("#c-b").value}); free(b); toast("Senha alterada"); vConta(); }
+  catch(e){ falha(e,b) }
+}
+
+/* ---------- BOOT ---------- */
+(async function(){
+  if(API.indexOf("COLE_SUA_URL")>=0){
+    document.body.innerHTML='<div class="wrap"><div class="card" style="margin-top:40px">'+
+      '<h2 style="color:#e0574a">Configuração pendente</h2>'+
+      '<div class="mut">Abra o index.html e substitua a constante <b>API</b> pela URL /exec da implantação do Apps Script.</div></div>';
+    return;
+  }
+  const tk=sessionStorage.getItem("vg_tk");
+  if(tk){
+    S.tk=tk; S.nome=sessionStorage.getItem("vg_nome")||"";
+    try{ S.cfg=await apiRh("bootstrap"); render("dash"); return; }catch(e){}
+  }
+  telaLogin();
+})();
+</script>
+</body>
+</html>
