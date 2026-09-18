@@ -28,6 +28,11 @@ var VALIDADE_DIAS = 15;
 var EXIGIR_PIN    = false;
 var MAX_TENTATIVAS= 5;
 var LOGIN_MAX     = 8;      // tentativas de login por e-mail a cada 15 min
+
+// ====== USUÁRIO INICIAL (criado/reposto pelo instalar) ======
+var ADMIN_LOGIN  = "admin";
+var ADMIN_NOME   = "Administrador";
+var ADMIN_SENHA  = "Vegas4747";   // troque pelo painel (aba Conta) depois do 1º acesso
 var ANEXAR_EVIDENCIAS = true;
 
 var ABAS = {
@@ -60,11 +65,12 @@ function configurarSite(urlBase){
   setProp_("APP_BASE", urlBase); return "APP_BASE salva: "+urlBase;
 }
 
-/* RODE UMA VEZ */
+/* RODE UMA VEZ.
+   Cria tudo DENTRO da própria planilha onde este script está (a "cracha").
+   Se o script não estiver vinculado a nenhuma planilha, cria uma nova.   */
 function instalar(){
-  var cfg = CFG();
-  var ss = cfg.SHEET_ID ? SpreadsheetApp.openById(cfg.SHEET_ID)
-                        : SpreadsheetApp.create("VEGAS · TERMOS DIGITAIS — BANCO");
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if(!ss) ss = SpreadsheetApp.create("VEGAS · TERMOS DIGITAIS — BANCO");
   setProp_("SHEET_ID", ss.getId());
   Object.keys(ABAS).forEach(function(nome){
     var sh = ss.getSheetByName(nome) || ss.insertSheet(nome);
@@ -81,12 +87,11 @@ function instalar(){
   setProp_("PASTA_PDF_ID",   pasta_("PDF_ASSINADOS", raiz).getId());
   setProp_("PASTA_ASSIN_ID", pasta_("ASSINATURAS_IMG", raiz).getId());
   setProp_("PASTA_TMP_ID",   pasta_("_TMP", raiz).getId());
-  if(!buscar_("usuarios", function(u){ return u.email==="rh@vegas"; })){
-    criarUsuario("rh@vegas","RH Vegas","Vegas@2026","admin");
-  }
-  return "OK. Planilha: "+ss.getUrl()+
-    "\nPróximo: configurarModelo(ID_DO_GOOGLE_DOCS) e configurarSite(URL_DO_SITE_ESTATICO)."+
-    "\nLogin inicial: rh@vegas / Vegas@2026 (troque no primeiro acesso).";
+  definirSenha(ADMIN_LOGIN, ADMIN_SENHA, ADMIN_NOME);
+  return "OK. Banco nesta planilha: "+ss.getName()+
+    "\nAbas criadas: "+Object.keys(ABAS).join(", ")+
+    "\nLogin: "+ADMIN_LOGIN+" / "+ADMIN_SENHA+" (troque pelo painel, aba Conta)."+
+    "\nPróximo: configurarModelo(ID_DO_GOOGLE_DOCS) e configurarSite(URL_DO_SITE_ESTATICO).";
 }
 function pasta_(nome, pai){
   var it = pai ? pai.getFoldersByName(nome) : DriveApp.getFoldersByName(nome);
@@ -197,6 +202,22 @@ function hashSenha_(senha, salt){
   for(var i=0;i<2000;i++) h = sha256_(h);
   return h;
 }
+/* Cria o usuário ou repõe a senha dele, e limpa o bloqueio de tentativas.
+   Rode no editor quando precisar resetar acesso: definirSenha("admin","NovaSenha"). */
+function definirSenha(login, senha, nome){
+  login = String(login||"").toLowerCase().trim();
+  var salt = rand_(16);
+  var u = buscar_("usuarios", function(x){ return String(x.email).toLowerCase()===login; });
+  if(u){
+    atualizar_("usuarios", u.id, {salt:salt, senhaHash:hashSenha_(senha,salt), ativo:"SIM"});
+  }else{
+    inserir_("usuarios",{id:novoId_("usuarios"), nome:nome||login, email:login,
+      senhaHash:hashSenha_(senha,salt), salt:salt, perfil:"admin", ativo:"SIM", criadoEm:agora_()});
+  }
+  CacheService.getScriptCache().remove("rl_"+sha256_(login).substr(0,20));
+  return "Acesso definido para: "+login;
+}
+
 function criarUsuario(email, nome, senha, perfil){
   var salt = rand_(16);
   return inserir_("usuarios",{id:novoId_("usuarios"),nome:nome,email:String(email).toLowerCase().trim(),
@@ -558,4 +579,28 @@ function testarGeracaoPdf(){
     {assinaturaId:"ASS-TESTE", dataHora:agora_(), ip:"0.0.0.0", userAgent:"editor"});
   Logger.log("PDF: https://drive.google.com/file/d/"+r.fileId+"/view\nHash: "+r.hash);
   return r;
+}
+
+/* ===================== DIAGNÓSTICO =====================
+   Rode no editor e leia o "Registro de execução".            */
+function diagnosticar(){
+  var cfg = CFG();
+  Logger.log("SHEET_ID: "+(cfg.SHEET_ID||"VAZIO — rode instalar()"));
+  try{ Logger.log("Planilha: "+SpreadsheetApp.openById(cfg.SHEET_ID).getName()); }catch(e){ Logger.log("Planilha inacessível"); }
+  Logger.log("TEMPLATE_DOC_ID: "+(cfg.TEMPLATE_DOC_ID||"VAZIO — rode configurarModelo()"));
+  Logger.log("APP_BASE: "+(cfg.APP_BASE||"VAZIO — rode configurarSite()"));
+  Object.keys(ABAS).forEach(function(a){
+    try{ Logger.log("  aba "+a+": "+Math.max(0, sh_(a).getLastRow()-1)+" registro(s)"); }
+    catch(e){ Logger.log("  aba "+a+": NÃO EXISTE"); }
+  });
+  var u = buscar_("usuarios", function(x){ return String(x.email).toLowerCase()===ADMIN_LOGIN; });
+  if(!u){ Logger.log("Usuário "+ADMIN_LOGIN+" NÃO existe — rode instalar()"); }
+  else{
+    Logger.log("Usuário "+ADMIN_LOGIN+" | ativo: "+u.ativo+
+               " | senha "+ADMIN_SENHA+" confere: "+(hashSenha_(ADMIN_SENHA,u.salt)===u.senhaHash));
+    Logger.log("Tentativas bloqueadas: "+(CacheService.getScriptCache().get("rl_"+sha256_(ADMIN_LOGIN).substr(0,20))||0));
+    try{ Logger.log("apiLogin: OK, token "+apiLogin(ADMIN_LOGIN,ADMIN_SENHA).token.substr(0,8)+"..."); }
+    catch(e){ Logger.log("apiLogin FALHOU: "+e.message); }
+  }
+  return "ver Registro de execução";
 }
