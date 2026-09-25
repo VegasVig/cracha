@@ -50,6 +50,16 @@ tr:hover td{background:#1b1f27}
 .linkbox{background:var(--card2);border:1px dashed var(--bd);border-radius:10px;padding:10px;word-break:break-all;font-size:12px;font-family:ui-monospace,Menlo,monospace}
 .kv{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #22262f;font-size:13px}
 .kv span{color:var(--mut)}.kv b{text-align:right}
+/* PDF já baixado: botão azul-acinzentado com ✓ e linha levemente destacada */
+.btn.baixado{background:#22344d;color:#9cc3f5;border:1px solid #37557d}
+tr.baixado td{background:rgba(61,127,214,.07)}
+tr.baixado:hover td{background:rgba(61,127,214,.13)}
+/* Exclusão em 2 cliques: 1º clique arma, 2º confirma */
+.btn.del{background:transparent;color:var(--red);border:1px solid #5a2a25}
+.btn.del.armado{background:var(--red);color:#fff;border-color:var(--red);animation:pulsa .8s infinite alternate}
+@keyframes pulsa{from{opacity:1}to{opacity:.7}}
+.legenda{display:flex;gap:14px;align-items:center;font-size:12px;color:var(--mut);margin-bottom:10px;flex-wrap:wrap}
+.legenda i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:5px}
 .ev{font-size:12px;color:var(--mut);padding:6px 0;border-bottom:1px solid #22262f}
 </style>
 </head>
@@ -213,6 +223,20 @@ function copiar(t){
     });
 }
 
+/* Botão de PDF: muda de cor quando já foi baixado */
+function botaoPdf(e, grande){
+  const ja=!!e.pdfBaixadoEm, cls="btn"+(grande?"":" sm")+(ja?" baixado":"");
+  const txt=ja?(grande?"✓ PDF já baixado":"✓ Baixado"):(grande?"Baixar PDF assinado":"PDF");
+  const tit=ja?`Baixado em ${e.pdfBaixadoEm} por ${e.pdfBaixadoPor}`:"Baixar PDF assinado";
+  return `<button class="${cls}" title="${esc(tit)}" data-em="${esc(e.pdfBaixadoEm||"")}" data-por="${esc(e.pdfBaixadoPor||"")}"
+    data-grande="${grande?1:""}" onclick="baixarPdf('${e.id}',this)">${txt}</button>`;
+}
+/* Botão de excluir: primeiro clique pede confirmação, segundo exclui */
+function botaoExcluir(e, grande){
+  if(e.status==="ASSINADO") return "";
+  return `<button class="btn del${grande?"":" sm"}" data-nome="${esc(e.nome)}" onclick="excluir('${e.id}',this)">Excluir</button>`;
+}
+
 /* ---------- LISTA ---------- */
 function vLista(){
   $("#view").innerHTML=`<h2>Entregas</h2>
@@ -234,9 +258,10 @@ function carregarLista(){
       const arr=await apiRh("listar",{filtro:{q:$("#l-q").value,status:$("#l-st").value,
         empresaId:$("#l-emp").value,de:$("#l-de").value,ate:$("#l-ate").value}});
       if(!arr.length){ $("#l-tab").innerHTML='<div class="mut">Nenhum registro encontrado.</div>'; return; }
-      $("#l-tab").innerHTML=`<table><thead><tr><th>Funcionário</th><th>CPF</th><th>Empresa</th><th>Entrega</th>
+      $("#l-tab").innerHTML=`<div class="legenda"><span><i style="background:#22344d;border:1px solid #37557d"></i>PDF já baixado</span>
+        <span>Excluir: clique uma vez e depois em <b>Confirmar</b></span></div><table><thead><tr><th>Funcionário</th><th>CPF</th><th>Empresa</th><th>Entrega</th>
         <th>Status</th><th>Assinado em</th><th></th></tr></thead><tbody>
-        ${arr.map(e=>`<tr><td><b>${esc(e.nome)}</b><div class="sm mut">${esc(e.id)}</div></td>
+        ${arr.map(e=>`<tr id="row-${e.id}" class="${e.pdfBaixadoEm?"baixado":""}"><td><b>${esc(e.nome)}</b><div class="sm mut">${esc(e.id)}</div></td>
           <td class="sm">${esc(e.cpfMask)}</td>
           <td class="sm">${esc(String(e.empresa).replace("VEGAS ","").substr(0,32))}</td>
           <td class="sm">${esc(e.dataEntrega)}<div class="sm mut">${esc(e.cidade)}</div></td>
@@ -245,7 +270,8 @@ function carregarLista(){
           <td><div class="row">
             <button class="btn sec sm" onclick="detalhe('${e.id}')">Ver</button>
             ${e.status!=="ASSINADO"&&e.status!=="CANCELADO"?`<button class="btn sec sm" onclick="copiar('${e.link}')">Link</button>`:""}
-            ${e.temPdf?`<button class="btn sm" onclick="baixarPdf('${e.id}',this)">PDF</button>`:""}
+            ${e.temPdf?botaoPdf(e,false):""}
+            ${botaoExcluir(e,false)}
           </div></td></tr>`).join("")}</tbody></table>`;
     }catch(e){ falha(e) }
   },250);
@@ -279,10 +305,11 @@ async function detalhe(id){
         ${d.eventos.map(x=>`<div class="ev">${esc(x.dataHora)} · <b>${esc(x.acao)}</b> · ${esc(x.usuario)}${x.detalhe?" · "+esc(x.detalhe):""}</div>`).join("")}
       </div>
       <div class="row" style="margin-top:16px">
-        ${e.temPdf?`<button class="btn" onclick="baixarPdf('${e.id}',this)">Baixar PDF assinado</button>`:""}
+        ${e.temPdf?botaoPdf(e,true):""}
         ${e.status!=="ASSINADO"&&e.status!=="CANCELADO"?`<button class="btn sec" onclick="copiar('${e.link}')">Copiar link</button>`:""}
         ${e.status!=="ASSINADO"?`<button class="btn sec" onclick="novoLink('${e.id}')">Gerar novo link</button>`:""}
         ${e.status!=="ASSINADO"?`<button class="btn red" onclick="cancelar('${e.id}')">Cancelar link</button>`:""}
+        ${botaoExcluir(e,true)}
       </div></div>`;
     document.body.appendChild(m);
   }catch(e){ falha(e) }
@@ -301,9 +328,35 @@ async function cancelar(id){
 }
 function recarregar(){ S.rota==="lista"?carregarLista():render(S.rota) }
 async function baixarPdf(id,b){
+  if(b.dataset.em && !confirm(`Este PDF já foi baixado em ${b.dataset.em} por ${b.dataset.por}.\n\nBaixar de novo?`)) return;
   busy(b,"...");
-  try{ const r=await apiRh("pdf",{id}); free(b); baixar(r.nome,r.base64); }
-  catch(e){ falha(e,b) }
+  try{
+    const r=await apiRh("pdf",{id}); free(b); baixar(r.nome,r.base64);
+    marcarBaixado(id);
+  }catch(e){ falha(e,b) }
+}
+/* Pinta como baixado na hora, na lista e no detalhe, sem recarregar */
+function marcarBaixado(id){
+  const agora=new Date().toLocaleString("pt-BR");
+  document.querySelectorAll(`button[onclick^="baixarPdf('${id}'"]`).forEach(x=>{
+    x.classList.add("baixado"); x.dataset.em=agora; x.dataset.por=S.nome||"você";
+    x.textContent=x.dataset.grande?"✓ PDF já baixado":"✓ Baixado"; x._o=x.textContent;
+    x.title=`Baixado em ${agora}`;
+  });
+  document.getElementById("row-"+id)?.classList.add("baixado");
+}
+async function excluir(id,b){
+  if(!b.classList.contains("armado")){          // 1º clique: pede confirmação
+    b.classList.add("armado"); b.textContent="Confirmar exclusão?";
+    b._t=setTimeout(()=>{ b.classList.remove("armado"); b.textContent="Excluir" },4000);
+    return;
+  }
+  clearTimeout(b._t); busy(b,"Excluindo...");  // 2º clique: exclui
+  try{
+    await apiRh("excluir",{id,motivo:"enviado por engano"});
+    document.querySelector(".mask")?.remove();
+    toast(`Envio de ${b.dataset.nome} excluído`); recarregar();
+  }catch(e){ b.classList.remove("armado"); falha(e,b); b.textContent="Excluir" }
 }
 function baixar(nome,b64){
   const bin=atob(b64), arr=new Uint8Array(bin.length);

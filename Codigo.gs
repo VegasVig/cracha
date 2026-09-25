@@ -1,13 +1,41 @@
 /*******************************************************************
- *  VEGAS · TERMOS DIGITAIS — API (Google Apps Script)
+ *  VEGAS · TERMOS DIGITAIS — API (Google Apps Script)   v2
+ *
  *  Apps Script = APENAS backend/banco. O frontend é estático
- *  (GitHub Pages, Netlify, Hostinger...) e conversa por fetch JSON.
+ *  (GitHub Pages) e conversa por fetch JSON.
+ *
+ *  ----------------------------------------------------------------
+ *  ORDEM DE INSTALAÇÃO (rode no editor, pelo botão Executar)
+ *  ----------------------------------------------------------------
+ *   1) instalar()          -> cria abas, pastas e o usuário admin
+ *   2) MODELO_DOC_ID       -> cole o ID do Google Docs modelo abaixo
+ *   3) configurarTudo()    -> grava APP_BASE e TEMPLATE_DOC_ID
+ *   4) corrigirFormatos()  -> só se a planilha já tiver dados antigos
+ *   5) corrigirLinks()     -> só se já existirem links quebrados
+ *   6) diagnosticar()      -> confere tudo e mostra no log
  *
  *  Implantar: Implantar > Nova implantação > App da Web
  *    - Executar como: Eu mesmo
  *    - Quem pode acessar: Qualquer pessoa
- *  Copie a URL /exec para dentro do index.html e do assinar.html.
+ *  IMPORTANTE: ao alterar este código, republique em
+ *  Implantar > Gerenciar implantações > lápis > Versão: Nova versão.
+ *  Sem isso a URL /exec continua servindo a versão antiga.
  *******************************************************************/
+
+// ==================================================================
+//  1. CONFIGURAÇÃO MANUAL — os dois valores que você precisa revisar
+// ==================================================================
+
+/* URL do site estático onde estão o index.html e o assinar.html.
+   Repositório: https://github.com/VegasVig/cracha
+   GitHub Pages (é ESTE que vai aqui, com barra no final):        */
+var SITE_BASE = "https://vegasvig.github.io/cracha/";
+
+/* ID do Google Docs com o modelo do termo.
+   Na URL do documento, é o trecho entre /d/ e /edit:
+   https://docs.google.com/document/d/AQUI_O_ID/edit
+   Pode colar a URL inteira também — o código extrai o ID.          */
+var MODELO_DOC_ID = "";
 
 // ====== EMPRESAS DO GRUPO (seletor do RH) ======
 var EMPRESAS = [
@@ -46,9 +74,16 @@ var ABAS = {
   auditoria:   ["id","dataHora","usuario","acao","entregaId","detalhe"]
 };
 
+/* Colunas que o Sheets adora converter em Date ou em número,
+   estragando comparações de texto e zeros à esquerda.
+   São normalizadas na leitura e podem ser reparadas na planilha. */
+var COL_DATAHORA = {criadoEm:1, atualizadoEm:1, acessadoEm:1, assinadoEm:1, canceladoEm:1, dataHora:1};
+var COL_DATA     = {dataEntrega:1, validadeAte:1};
+var COL_TEXTO    = {cpf:1, telefone:1, matricula:1, pin:1, token:1};
+
 // ===================== CONFIG =====================
 function prop_(k){ return PropertiesService.getScriptProperties().getProperty(k) || ""; }
-function setProp_(k,v){ PropertiesService.getScriptProperties().setProperty(k,v); }
+function setProp_(k,v){ PropertiesService.getScriptProperties().setProperty(k, String(v)); }
 function CFG(){
   return {
     SHEET_ID:        prop_("SHEET_ID"),
@@ -56,14 +91,56 @@ function CFG(){
     PASTA_PDF_ID:    prop_("PASTA_PDF_ID"),
     PASTA_ASSIN_ID:  prop_("PASTA_ASSIN_ID"),
     PASTA_TMP_ID:    prop_("PASTA_TMP_ID"),
-    APP_BASE:        prop_("APP_BASE")   // ex.: https://vegasvig.github.io/termos/
+    APP_BASE:        prop_("APP_BASE")   // ex.: https://vegasvig.github.io/cracha/
   };
 }
-function configurarModelo(docId){ setProp_("TEMPLATE_DOC_ID", docId); return "TEMPLATE_DOC_ID salvo."; }
-function configurarSite(urlBase){
-  if(!/\/$/.test(urlBase)) urlBase += "/";
-  setProp_("APP_BASE", urlBase); return "APP_BASE salva: "+urlBase;
+
+/* Grava as duas propriedades de uma vez, usando as constantes do topo.
+   Use SEMPRE esta função: as funções que recebem argumento não podem
+   ser executadas pelo botão Executar do editor (o argumento chega
+   vazio e a propriedade é gravada como "undefined").               */
+function configurarTudo(){
+  if(!MODELO_DOC_ID){
+    throw new Error("Cole o ID do Google Docs modelo na constante MODELO_DOC_ID, no topo deste arquivo, e rode de novo.");
+  }
+  var a = configurarSite(SITE_BASE);
+  var b = configurarModelo(MODELO_DOC_ID);
+  limparCacheModelo();
+  Logger.log(a); Logger.log(b);
+  return diagnosticar();
 }
+
+function configurarSite(urlBase){
+  urlBase = String(urlBase||"").trim();
+  if(urlBase.indexOf("http")!==0)
+    throw new Error("URL do site inválida (\""+urlBase+"\"). Preencha SITE_BASE no topo do arquivo e rode configurarTudo().");
+  if(urlBase.indexOf("github.com")>=0)
+    throw new Error("Esse é o endereço do repositório. Use o endereço do GitHub Pages, por exemplo: https://vegasvig.github.io/cracha/");
+  if(!/\/$/.test(urlBase)) urlBase += "/";
+  setProp_("APP_BASE", urlBase);
+  return "APP_BASE salva: "+urlBase;
+}
+
+function configurarModelo(docId){
+  docId = String(docId||"").trim();
+  var m = docId.match(/[-\w]{25,}/);     // aceita o ID puro ou a URL inteira
+  if(!m)
+    throw new Error("ID do Google Docs inválido (\""+docId+"\"). Preencha MODELO_DOC_ID no topo do arquivo e rode configurarTudo().");
+  var id = m[0];
+  try{ DocumentApp.openById(id).getName(); }
+  catch(e){ throw new Error("Não consegui abrir esse Google Docs. Confira o ID e se a conta deste script tem acesso ao documento."); }
+  setProp_("TEMPLATE_DOC_ID", id);
+  return "TEMPLATE_DOC_ID salvo: "+id;
+}
+
+/* Base do site validada — usada antes de montar qualquer link. */
+function baseValida_(){
+  var b = CFG().APP_BASE;
+  if(!b || b.indexOf("http")!==0 || b.indexOf("undefined")>=0)
+    throw new Error("O endereço do site de assinatura não está configurado. No editor do Apps Script, rode configurarTudo().");
+  return b;
+}
+function linkDe_(token){ return baseValida_() + "assinar.html?t=" + token; }
 
 /* RODE UMA VEZ.
    Cria tudo DENTRO da própria planilha onde este script está (a "cracha").
@@ -74,6 +151,8 @@ function instalar(){
   setProp_("SHEET_ID", ss.getId());
   Object.keys(ABAS).forEach(function(nome){
     var sh = ss.getSheetByName(nome) || ss.insertSheet(nome);
+    // texto puro em toda a área de dados: impede o Sheets de virar datas/números
+    sh.getRange(1, 1, sh.getMaxRows(), ABAS[nome].length).setNumberFormat("@");
     if(sh.getLastRow()===0){
       sh.appendRow(ABAS[nome]);
       sh.getRange(1,1,1,ABAS[nome].length).setFontWeight("bold");
@@ -91,7 +170,7 @@ function instalar(){
   return "OK. Banco nesta planilha: "+ss.getName()+
     "\nAbas criadas: "+Object.keys(ABAS).join(", ")+
     "\nLogin: "+ADMIN_LOGIN+" / "+ADMIN_SENHA+" (troque pelo painel, aba Conta)."+
-    "\nPróximo: configurarModelo(ID_DO_GOOGLE_DOCS) e configurarSite(URL_DO_SITE_ESTATICO).";
+    "\nPróximo: preencha MODELO_DOC_ID no topo e rode configurarTudo().";
 }
 function pasta_(nome, pai){
   var it = pai ? pai.getFoldersByName(nome) : DriveApp.getFoldersByName(nome);
@@ -139,21 +218,47 @@ function despachar_(acao, d){
     case "dashboard":   return apiDashboard(d.tk);
     case "detalhe":     return apiDetalhe(d.tk, d.id);
     case "cancelar":    return apiCancelar(d.tk, d.id, d.motivo);
+    case "excluir":     return apiExcluir(d.tk, d.id, d.motivo);
     case "novoLink":    return apiNovoLink(d.tk, d.id);
     case "pdf":         return apiPdf(d.tk, d.id);
+    case "status":      return apiStatus(d.tk);
     default: throw new Error("ação desconhecida: "+acao);
   }
 }
 
 // ===================== BANCO (Sheets) =====================
-function sh_(aba){ return SpreadsheetApp.openById(CFG().SHEET_ID).getSheetByName(aba); }
+function sh_(aba){
+  var id = CFG().SHEET_ID;
+  if(!id) throw new Error("Banco não instalado. Rode instalar() no editor do Apps Script.");
+  var sh = SpreadsheetApp.openById(id).getSheetByName(aba);
+  if(!sh) throw new Error("Aba \""+aba+"\" não existe na planilha. Rode instalar().");
+  return sh;
+}
+function fmtDH_(d){ return Utilities.formatDate(d,"America/Sao_Paulo","yyyy-MM-dd HH:mm:ss"); }
+function fmtD_(d){  return Utilities.formatDate(d,"America/Sao_Paulo","yyyy-MM-dd"); }
+
+/* Devolve todo valor lido da planilha no formato que o código espera:
+   datas como texto "yyyy-MM-dd[ HH:mm:ss]" e CPF com 11 dígitos.
+   Isso conserta, na leitura, registros antigos já convertidos pelo Sheets. */
+function normCel_(head, v){
+  if(v instanceof Date) return COL_DATA[head] ? fmtD_(v) : fmtDH_(v);
+  if(head==="cpf"){
+    var s = String(v==null?"":v).replace(/\D/g,"");
+    if(!s) return "";
+    while(s.length<11) s = "0"+s;      // Sheets come o zero da frente
+    return s;
+  }
+  if(COL_TEXTO[head]) return String(v==null?"":v);
+  return v;
+}
+
 function lerTabela_(aba){
   var sh = sh_(aba), last = sh.getLastRow();
   if(last<2) return [];
   var head = ABAS[aba];
   return sh.getRange(2,1,last-1,head.length).getValues().map(function(r,i){
     var o = {_linha:i+2};
-    head.forEach(function(h,c){ o[h]= r[c]; });
+    head.forEach(function(h,c){ o[h] = normCel_(h, r[c]); });
     return o;
   }).filter(function(o){ return o.id!==""; });
 }
@@ -181,7 +286,8 @@ function novoId_(aba){
   var pfx = {entregas:"ENT",funcionarios:"FUN",assinaturas:"ASS",auditoria:"AUD",usuarios:"USR"}[aba]||"REG";
   return pfx + "-" + new Date().getFullYear() + "-" + rand_(6);
 }
-function agora_(){ return Utilities.formatDate(new Date(), "America/Sao_Paulo", "yyyy-MM-dd HH:mm:ss"); }
+function agora_(){ return fmtDH_(new Date()); }
+function hoje_(){  return fmtD_(new Date()); }
 function rand_(n){
   var abc="ABCDEFGHJKLMNPQRSTUVWXYZ23456789", s="", b=Utilities.getUuid().replace(/-/g,"");
   for(var i=0;i<n;i++) s += abc.charAt(Math.floor((parseInt(b.substr(i*2,2),16)/256)*abc.length));
@@ -196,6 +302,47 @@ function auditar_(usuario, acao, entregaId, detalhe){
         acao:acao, entregaId:entregaId||"", detalhe:detalhe||""}); }catch(e){}
 }
 
+// ===================== MANUTENÇÃO / REPARO =====================
+
+/* Formata as colunas como texto puro e reescreve os valores já
+   convertidos pelo Sheets (datas viradas Date, CPF sem o zero inicial).
+   Seguro rodar quantas vezes quiser.                                 */
+function corrigirFormatos(){
+  var ss = SpreadsheetApp.openById(CFG().SHEET_ID), log = [];
+  Object.keys(ABAS).forEach(function(nome){
+    var sh = ss.getSheetByName(nome);
+    if(!sh){ log.push(nome+": aba não existe"); return; }
+    var head = ABAS[nome], nCol = head.length;
+    sh.getRange(1, 1, sh.getMaxRows(), nCol).setNumberFormat("@");
+    var last = sh.getLastRow();
+    if(last < 2){ log.push(nome+": sem registros"); return; }
+    var rg = sh.getRange(2, 1, last-1, nCol), vals = rg.getValues(), mud = 0;
+    for(var r=0; r<vals.length; r++){
+      for(var c=0; c<nCol; c++){
+        var novo = normCel_(head[c], vals[r][c]);
+        if(novo !== vals[r][c]){ vals[r][c] = novo; mud++; }
+      }
+    }
+    if(mud) rg.setValues(vals);
+    log.push(nome+": "+(last-1)+" registro(s), "+mud+" célula(s) corrigida(s)");
+  });
+  return log.join("\n");
+}
+
+/* Reescreve o link de assinatura das entregas ainda abertas usando a
+   APP_BASE atual. Use depois de configurar (ou trocar) o site.        */
+function corrigirLinks(){
+  var base = baseValida_(), n = 0, total = 0;
+  lerTabela_("entregas").forEach(function(e){
+    if(e.status==="ASSINADO" || e.status==="CANCELADO") return;
+    if(!e.token) return;
+    total++;
+    var novo = base + "assinar.html?t=" + e.token;
+    if(String(e.linkAssinatura) !== novo){ atualizar_("entregas", e.id, {linkAssinatura:novo}); n++; }
+  });
+  return n+" de "+total+" link(s) aberto(s) atualizado(s) para "+base;
+}
+
 // ===================== AUTENTICAÇÃO DO RH =====================
 function hashSenha_(senha, salt){
   var h = salt + "|" + senha;
@@ -203,9 +350,10 @@ function hashSenha_(senha, salt){
   return h;
 }
 /* Cria o usuário ou repõe a senha dele, e limpa o bloqueio de tentativas.
-   Rode no editor quando precisar resetar acesso: definirSenha("admin","NovaSenha"). */
+   Para resetar acesso sem passar argumento, edite RESET_* e rode resetarAdmin(). */
 function definirSenha(login, senha, nome){
   login = String(login||"").toLowerCase().trim();
+  if(!login || !senha) throw new Error("Informe login e senha. Pelo editor, use resetarAdmin().");
   var salt = rand_(16);
   var u = buscar_("usuarios", function(x){ return String(x.email).toLowerCase()===login; });
   if(u){
@@ -217,6 +365,8 @@ function definirSenha(login, senha, nome){
   CacheService.getScriptCache().remove("rl_"+sha256_(login).substr(0,20));
   return "Acesso definido para: "+login;
 }
+/* Repõe a senha do admin sem precisar passar argumento pelo editor. */
+function resetarAdmin(){ return definirSenha(ADMIN_LOGIN, ADMIN_SENHA, ADMIN_NOME); }
 
 function criarUsuario(email, nome, senha, perfil){
   var salt = rand_(16);
@@ -280,9 +430,19 @@ function apiBootstrap(tk){
   return {empresas:EMPRESAS, cidades:CIDADES, itens:ITENS, valorPadrao:VALOR_PADRAO,
           validadeDias:VALIDADE_DIAS, exigirPin:EXIGIR_PIN};
 }
+/* Situação da configuração, visível pelo painel (útil para suporte). */
+function apiStatus(tk){
+  sess_(tk);
+  var cfg = CFG(), modeloOk = false, modeloErro = "";
+  try{ textoModelo_(); modeloOk = true; }catch(e){ modeloErro = e.message; }
+  var baseOk = true, baseErro = "";
+  try{ baseValida_(); }catch(e){ baseOk = false; baseErro = e.message; }
+  return {appBase:cfg.APP_BASE, baseOk:baseOk, baseErro:baseErro,
+          templateDocId:cfg.TEMPLATE_DOC_ID, modeloOk:modeloOk, modeloErro:modeloErro};
+}
 function apiCriarEntrega(tk, dados){
   var s = sess_(tk);
-  if(!CFG().APP_BASE) throw new Error("APP_BASE não configurada — rode configurarSite(URL) no editor.");
+  baseValida_();                       // falha cedo, com mensagem clara
   var emp = EMPRESAS.filter(function(e){ return e.id===dados.empresaId; })[0];
   if(!emp) throw new Error("Selecione a empresa.");
   var nome = String(dados.nome||"").trim().toUpperCase().replace(/\s+/g," ");
@@ -301,16 +461,16 @@ function apiCriarEntrega(tk, dados){
   var id = novoId_("entregas"), tkAssin = token_();
   var pin = EXIGIR_PIN ? String(Math.floor(100000+Math.random()*900000)) : "";
   var validade = new Date(); validade.setDate(validade.getDate()+VALIDADE_DIAS);
-  var link = CFG().APP_BASE + "assinar.html?t=" + tkAssin;
+  var link = linkDe_(tkAssin);
 
   inserir_("entregas",{
     id:id, empresaId:emp.id, empresa:emp.nome, cnpj:emp.cnpj,
     funcionarioId:func.id, nome:nome, cpf:cpf,
     documentoTipo:"TERMO_CRACHA", item:dados.item||ITEM_PADRAO,
     valorReposicao:dados.valorReposicao||VALOR_PADRAO, cidade:dados.cidade||emp.cidade,
-    dataEntrega:dados.dataEntrega||Utilities.formatDate(new Date(),"America/Sao_Paulo","yyyy-MM-dd"),
+    dataEntrega:String(dados.dataEntrega||hoje_()).substr(0,10),
     status:"PENDENTE", token:tkAssin, pin:pin, tentativas:0,
-    validadeAte:Utilities.formatDate(validade,"America/Sao_Paulo","yyyy-MM-dd"),
+    validadeAte:fmtD_(validade),
     linkAssinatura:link, criadoEm:agora_(), criadoPor:s.email, atualizadoEm:agora_()
   });
   auditar_(s.email,"ENTREGA_CRIADA",id, emp.nome+" · "+nome);
@@ -319,7 +479,8 @@ function apiCriarEntrega(tk, dados){
 function apiListar(tk, filtro){
   sess_(tk);
   var q = String(filtro.q||"").toLowerCase().trim(), qd = soDig_(filtro.q);
-  return lerTabela_("entregas").map(expirar_).filter(function(e){
+  var baix = pdfsBaixados_();
+  return lerTabela_("entregas").filter(naoExcluido_).map(expirar_).filter(function(e){
     if(filtro.status && filtro.status!=="TODOS" && e.status!==filtro.status) return false;
     if(filtro.empresaId && filtro.empresaId!=="TODAS" && e.empresaId!==filtro.empresaId) return false;
     if(filtro.de && String(e.criadoEm).substr(0,10) < filtro.de) return false;
@@ -336,12 +497,13 @@ function apiListar(tk, filtro){
       return {id:e.id, nome:e.nome, cpfMask:cpfMask_(e.cpf), empresa:e.empresa, empresaId:e.empresaId,
         cidade:e.cidade, dataEntrega:e.dataEntrega, status:e.status, criadoEm:e.criadoEm,
         assinadoEm:e.assinadoEm, validadeAte:e.validadeAte, link:e.linkAssinatura,
-        temPdf: !!e.pdfFileId, criadoPor:e.criadoPor};
+        temPdf: !!e.pdfFileId, criadoPor:e.criadoPor,
+        pdfBaixadoEm: baix[e.id] ? baix[e.id].em : "", pdfBaixadoPor: baix[e.id] ? baix[e.id].por : ""};
     });
 }
 function apiDashboard(tk){
   sess_(tk);
-  var arr = lerTabela_("entregas").map(expirar_);
+  var arr = lerTabela_("entregas").filter(naoExcluido_).map(expirar_);
   var cont = function(st){ return arr.filter(function(e){ return e.status===st; }).length; };
   var mesAtual = Utilities.formatDate(new Date(),"America/Sao_Paulo","yyyy-MM");
   return {
@@ -357,38 +519,78 @@ function apiDashboard(tk){
 }
 function apiDetalhe(tk, id){
   var s = sess_(tk);
-  var e = expirar_(porId_("entregas", id)); if(!e) throw new Error("Entrega não encontrada.");
+  var e = expirar_(porId_("entregas", id));
+  if(!e || e.status==="EXCLUIDO") throw new Error("Entrega não encontrada.");
+  var baix = pdfsBaixados_()[id];
   var a = buscar_("assinaturas", function(x){ return x.entregaId===id; });
   var evs = lerTabela_("auditoria").filter(function(x){ return x.entregaId===id; })
              .sort(function(x,y){ return String(x.dataHora).localeCompare(String(y.dataHora)); });
   auditar_(s.email,"ENTREGA_CONSULTADA",id,"");
+
+  /* O texto do termo vem do Google Docs modelo. Se o modelo estiver
+     indisponível, o registro ainda abre — antes a tela inteira quebrava. */
+  var termo, termoErro = "";
+  try{ termo = montarTermo_(e); }
+  catch(err){ termoErro = err.message; termo = ["[Texto do termo indisponível: "+err.message+"]"]; }
+
   return {
     entrega:{id:e.id, nome:e.nome, cpfMask:cpfMask_(e.cpf), empresa:e.empresa, cnpj:e.cnpj,
       cidade:e.cidade, item:e.item, valorReposicao:e.valorReposicao, dataEntrega:e.dataEntrega,
       status:e.status, link:e.linkAssinatura, pin:e.pin, validadeAte:e.validadeAte,
       criadoEm:e.criadoEm, criadoPor:e.criadoPor, acessadoEm:e.acessadoEm, assinadoEm:e.assinadoEm,
-      hashPdf:e.hashPdf, temPdf:!!e.pdfFileId},
+      hashPdf:e.hashPdf, temPdf:!!e.pdfFileId,
+      pdfBaixadoEm: baix ? baix.em : "", pdfBaixadoPor: baix ? baix.por : ""},
     assinatura: a ? {id:a.id, dataHora:a.dataHora, ip:a.ip, userAgent:a.userAgent, hashPdf:a.hashPdf} : null,
     eventos: evs.map(function(x){ return {dataHora:x.dataHora, usuario:x.usuario, acao:x.acao, detalhe:x.detalhe}; }),
-    termo: montarTermo_(e)
+    termo: termo, termoErro: termoErro
   };
 }
 function apiCancelar(tk, id, motivo){
   var s = sess_(tk);
   var e = porId_("entregas", id); if(!e) throw new Error("Entrega não encontrada.");
   if(e.status==="ASSINADO") throw new Error("Termo já assinado — não pode ser cancelado.");
+  if(e.status==="EXCLUIDO") throw new Error("Este envio foi excluído.");
   atualizar_("entregas", id, {status:"CANCELADO", canceladoEm:agora_(), canceladoPor:s.email, token:""});
   auditar_(s.email,"ENTREGA_CANCELADA",id, motivo||"");
   return true;
 }
+/* Exclui um envio feito por engano.
+   - Só vale para termos NÃO assinados (termo assinado é prova e fica guardado).
+   - O link para de funcionar na hora e o registro some das listas e do dashboard.
+   - A linha continua na planilha com status EXCLUIDO + auditoria (quem e quando),
+     para não perder rastreabilidade.                                         */
+function apiExcluir(tk, id, motivo){
+  var s = sess_(tk);
+  var e = porId_("entregas", id); if(!e) throw new Error("Entrega não encontrada.");
+  if(e.status==="ASSINADO") throw new Error("Termo já assinado — não pode ser excluído.");
+  if(e.status==="EXCLUIDO") return true;
+  atualizar_("entregas", id, {status:"EXCLUIDO", canceladoEm:agora_(), canceladoPor:s.email, token:""});
+  auditar_(s.email,"ENTREGA_EXCLUIDA",id, (motivo||"enviado por engano")+" · "+e.nome);
+  return true;
+}
+function naoExcluido_(e){ return e.status!=="EXCLUIDO"; }
+
+/* Último download do PDF feito pelo painel, por entrega: {id:{em,por}} */
+function pdfsBaixados_(){
+  var m = {};
+  lerTabela_("auditoria").forEach(function(a){
+    if(a.acao!=="PDF_BAIXADO") return;
+    var atual = m[a.entregaId];
+    if(!atual || String(a.dataHora) > String(atual.em)) m[a.entregaId] = {em:String(a.dataHora), por:a.usuario};
+  });
+  return m;
+}
+
 function apiNovoLink(tk, id){
   var s = sess_(tk);
+  baseValida_();
   var e = expirar_(porId_("entregas", id)); if(!e) throw new Error("Entrega não encontrada.");
   if(e.status==="ASSINADO") throw new Error("Termo já assinado.");
+  if(e.status==="EXCLUIDO") throw new Error("Este envio foi excluído.");
   var t = token_(), validade = new Date(); validade.setDate(validade.getDate()+VALIDADE_DIAS);
-  var link = CFG().APP_BASE+"assinar.html?t="+t;
+  var link = linkDe_(t);
   atualizar_("entregas", id, {token:t, status:"PENDENTE", tentativas:0,
-    validadeAte:Utilities.formatDate(validade,"America/Sao_Paulo","yyyy-MM-dd"), linkAssinatura:link});
+    validadeAte:fmtD_(validade), linkAssinatura:link});
   auditar_(s.email,"LINK_REGERADO",id,"");
   return {link:link};
 }
@@ -402,13 +604,13 @@ function apiPdf(tk, id){
 
 // ===================== FLUXO PÚBLICO =====================
 function porToken_(t){
-  t = String(t||""); if(t.length<20) return null;
+  t = String(t||"").trim(); if(t.length<20) return null;
   return buscar_("entregas", function(e){ return String(e.token)===t; });
 }
 function expirar_(e){
   if(!e) return e;
   if((e.status==="PENDENTE"||e.status==="ACESSADO") && e.validadeAte &&
-     Utilities.formatDate(new Date(),"America/Sao_Paulo","yyyy-MM-dd") > String(e.validadeAte).substr(0,10)){
+     hoje_() > String(e.validadeAte).substr(0,10)){
     atualizar_("entregas", e.id, {status:"EXPIRADO"});
     e.status = "EXPIRADO";
   }
@@ -437,6 +639,12 @@ function pubValidar(token, cpf5, pin){
     Utilities.sleep(800);
     throw new Error("Dados não conferem. Confira os 5 últimos dígitos do seu CPF.");
   }
+  var termo;
+  try{ termo = montarTermo_(e); }
+  catch(err){
+    auditar_("funcionario","MODELO_INDISPONIVEL",e.id,err.message);
+    throw new Error("O texto do termo não pôde ser carregado. Avise o RH e tente mais tarde.");
+  }
   var acc = token_();
   CacheService.getScriptCache().put("acc_"+acc, e.id, 1800);
   if(e.status==="PENDENTE"){
@@ -444,7 +652,7 @@ function pubValidar(token, cpf5, pin){
     auditar_("funcionario","LINK_ACESSADO",e.id,"");
   }
   return {acc:acc, status:e.status==="ASSINADO"?"ASSINADO":"ACESSADO",
-          termo:montarTermo_(e), assinadoEm:e.assinadoEm||""};
+          termo:termo, assinadoEm:e.assinadoEm||""};
 }
 function acc_(acc){
   var id = CacheService.getScriptCache().get("acc_"+String(acc||""));
@@ -519,22 +727,39 @@ function montarTermo_(e){
 function textoModelo_(){
   var cache = CacheService.getScriptCache(), k="modelo_txt", c=cache.get(k);
   if(c) return JSON.parse(c);
-  if(!CFG().TEMPLATE_DOC_ID) throw new Error("TEMPLATE_DOC_ID não configurado.");
-  var linhas = DocumentApp.openById(CFG().TEMPLATE_DOC_ID).getBody().getText().split("\n");
+  var id = CFG().TEMPLATE_DOC_ID;
+  if(!id || id==="undefined")
+    throw new Error("O modelo do termo não está configurado. No editor do Apps Script, preencha MODELO_DOC_ID e rode configurarTudo().");
+  var doc;
+  try{ doc = DocumentApp.openById(id); }
+  catch(err){ throw new Error("Não foi possível abrir o Google Docs modelo (ID "+id+"). Confira o ID e as permissões, e rode configurarTudo()."); }
+  var linhas = doc.getBody().getText().split("\n");
   cache.put(k, JSON.stringify(linhas), 21600);
   return linhas;
 }
 function limparCacheModelo(){ CacheService.getScriptCache().remove("modelo_txt"); return "ok"; }
 
+/* Confere se o Docs modelo tem todos os marcadores esperados. */
+function conferirModelo(){
+  var txt = textoModelo_().join("\n");
+  var esperados = ["NOME","CPF","EMPRESA","CNPJ","ITEM","VALOR_REPOSICAO","CIDADE","DIA","MES","ANO","ASSINATURA_COLABORADOR"];
+  var falta = esperados.filter(function(k){ return txt.indexOf("{{"+k+"}}")<0; });
+  var msg = falta.length ? "Faltam no modelo: {{"+falta.join("}}, {{")+"}}"
+                         : "Modelo OK — todos os marcadores presentes.";
+  Logger.log(msg);
+  return msg;
+}
+
 // ===================== PDF =====================
 function gerarPdf_(e, assinBlob, ev){
   var cfg = CFG();
-  if(!cfg.TEMPLATE_DOC_ID) throw new Error("TEMPLATE_DOC_ID não configurado.");
+  if(!cfg.TEMPLATE_DOC_ID || cfg.TEMPLATE_DOC_ID==="undefined")
+    throw new Error("O modelo do termo não está configurado. Avise o RH.");
   var copia = DriveApp.getFileById(cfg.TEMPLATE_DOC_ID).makeCopy("TMP_"+e.id, DriveApp.getFolderById(cfg.PASTA_TMP_ID));
   try{
     var doc = DocumentApp.openById(copia.getId()), body = doc.getBody();
     var c = camposDe_(e, ev.dataHora);
-    Object.keys(c).forEach(function(k){ body.replaceText("\\{\\{"+k+"\\}\\}", c[k]); });
+    Object.keys(c).forEach(function(k){ body.replaceText("\\{\\{"+k+"\\}\\}", String(c[k]==null?"":c[k])); });
     body.replaceText("\\{\\{ASSINATURA_RESPONSAVEL\\}\\}", "");
 
     var achou = body.findText("\\{\\{ASSINATURA_COLABORADOR\\}\\}");
@@ -585,19 +810,43 @@ function testarGeracaoPdf(){
    Rode no editor e leia o "Registro de execução".            */
 function diagnosticar(){
   var cfg = CFG();
+
+  Logger.log("— BANCO —");
   Logger.log("SHEET_ID: "+(cfg.SHEET_ID||"VAZIO — rode instalar()"));
-  try{ Logger.log("Planilha: "+SpreadsheetApp.openById(cfg.SHEET_ID).getName()); }catch(e){ Logger.log("Planilha inacessível"); }
-  Logger.log("TEMPLATE_DOC_ID: "+(cfg.TEMPLATE_DOC_ID||"VAZIO — rode configurarModelo()"));
-  Logger.log("APP_BASE: "+(cfg.APP_BASE||"VAZIO — rode configurarSite()"));
+  try{ Logger.log("Planilha: "+SpreadsheetApp.openById(cfg.SHEET_ID).getName()); }
+  catch(e){ Logger.log("Planilha inacessível"); }
   Object.keys(ABAS).forEach(function(a){
     try{ Logger.log("  aba "+a+": "+Math.max(0, sh_(a).getLastRow()-1)+" registro(s)"); }
-    catch(e){ Logger.log("  aba "+a+": NÃO EXISTE"); }
+    catch(e){ Logger.log("  aba "+a+": NÃO EXISTE — rode instalar()"); }
   });
+
+  Logger.log("— SITE DE ASSINATURA —");
+  Logger.log("APP_BASE: "+(cfg.APP_BASE||"VAZIO"));
+  try{ Logger.log("  link de exemplo: "+linkDe_("EXEMPLODETOKEN123456789012345678")); }
+  catch(e){ Logger.log("  PROBLEMA: "+e.message); }
+
+  Logger.log("— MODELO DO TERMO —");
+  Logger.log("TEMPLATE_DOC_ID: "+(cfg.TEMPLATE_DOC_ID||"VAZIO"));
+  try{
+    var n = textoModelo_().length;
+    Logger.log("  modelo lido: "+n+" linha(s)");
+    Logger.log("  "+conferirModelo());
+  }catch(e){ Logger.log("  PROBLEMA: "+e.message); }
+
+  Logger.log("— PASTAS DO DRIVE —");
+  [["PASTA_PDF_ID",cfg.PASTA_PDF_ID],["PASTA_ASSIN_ID",cfg.PASTA_ASSIN_ID],["PASTA_TMP_ID",cfg.PASTA_TMP_ID]]
+    .forEach(function(p){
+      if(!p[1]){ Logger.log("  "+p[0]+": VAZIO — rode instalar()"); return; }
+      try{ Logger.log("  "+p[0]+": "+DriveApp.getFolderById(p[1]).getName()); }
+      catch(e){ Logger.log("  "+p[0]+": INACESSÍVEL"); }
+    });
+
+  Logger.log("— ACESSO DO RH —");
   var u = buscar_("usuarios", function(x){ return String(x.email).toLowerCase()===ADMIN_LOGIN; });
-  if(!u){ Logger.log("Usuário "+ADMIN_LOGIN+" NÃO existe — rode instalar()"); }
+  if(!u){ Logger.log("Usuário "+ADMIN_LOGIN+" NÃO existe — rode instalar() ou resetarAdmin()"); }
   else{
     Logger.log("Usuário "+ADMIN_LOGIN+" | ativo: "+u.ativo+
-               " | senha "+ADMIN_SENHA+" confere: "+(hashSenha_(ADMIN_SENHA,u.salt)===u.senhaHash));
+               " | senha padrão confere: "+(hashSenha_(ADMIN_SENHA,u.salt)===u.senhaHash));
     Logger.log("Tentativas bloqueadas: "+(CacheService.getScriptCache().get("rl_"+sha256_(ADMIN_LOGIN).substr(0,20))||0));
     try{ Logger.log("apiLogin: OK, token "+apiLogin(ADMIN_LOGIN,ADMIN_SENHA).token.substr(0,8)+"..."); }
     catch(e){ Logger.log("apiLogin FALHOU: "+e.message); }
