@@ -103,7 +103,7 @@ function telaLogin(msg){
   $("#app").innerHTML=`<div class="wrap"><div class="login card">
     <h2><span style="color:var(--gold)">VEGAS</span> · Termos Digitais</h2>
     <div class="mut sm">Painel do RH — entrega e assinatura de termos</div>
-    <label>E-mail</label><input id="lg-email" autocomplete="username">
+    <label>Usuário</label><input id="lg-usuario" autocomplete="username">
     <label>Senha</label><input id="lg-senha" type="password" autocomplete="current-password">
     <div style="margin-top:16px"><button class="btn" style="width:100%" id="lg-btn">Entrar</button></div>
     ${msg?`<div class="sm" style="color:var(--red);margin-top:10px">${esc(msg)}</div>`:""}
