@@ -49,8 +49,8 @@ var EMPRESAS = [
 var CIDADES = ["Volta Redonda","Niterói","Piraí"];
 
 // ====== PARÂMETROS ======
-var ITEM_PADRAO   = "1 (um) crachá funcional provisório";
-var ITENS         = ["1 (um) crachá funcional provisório","1 (um) crachá funcional definitivo","2 (dois) crachás funcionais provisórios"];
+var ITEM_PADRAO   = "1 (um) crachá funcional definitivo";
+var ITENS         = ["1 (um) crachá funcional definitivo","1 (um) crachá funcional provisório","2 (dois) crachás funcionais provisórios"];
 var VALOR_PADRAO  = "R$ 20,00 (vinte reais)";
 var VALIDADE_DIAS = 15;
 var EXIGIR_PIN    = false;

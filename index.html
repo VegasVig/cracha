@@ -419,7 +419,7 @@ function vNova(){
       <div><label>Cidade do termo</label><select id="f-cidade">${c.cidades.map(x=>`<option>${x}</option>`).join("")}</select></div>
       <div><label>Data da entrega</label><input id="f-data" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
     </div>
-    <label>Item entregue</label><select id="f-item">${c.itens.map(x=>`<option>${esc(x)}</option>`).join("")}</select>
+    <label>Item entregue</label><select id="f-item">${c.itens.map(x=>`<option${/definitivo/i.test(x)?" selected":""}>${esc(x)}</option>`).join("")}</select>
     <label>Valor de reposição</label><input id="f-valor" value="${esc(c.valorPadrao)}">
     <div class="grid g2">
       <div><label>E-mail (opcional)</label><input id="f-email" type="email"></div>
